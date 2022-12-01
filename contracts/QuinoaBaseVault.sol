@@ -11,17 +11,56 @@ contract QuinoaBaseVault is ERC20, IQuinoaBaseVault {
 
     IERC20 private immutable _asset;
     uint8 private immutable _decimals;
+    uint16 private _float; // 만분율
 
-    // strategy 관련 여러 변수들 선언 필요
+    address dacAddr;
+    string dacName;
+    uint createdAt;
 
-    // constructor 수정 필요
-    constructor(IERC20 asset_) {
-        (bool success, uint8 assetDecimals) = _tryGetAssetDecimals(asset_);
-        _decimals = success ? assetDecimals : super.decimals();
-        _asset = asset_;
+    bool emergencyExit = false; 
+
+    // strategy 관련 변수들 선언 필요
+    // 임시
+    struct Strategy {
+        uint8 strategyId; // strategy id(vault 안에서 이용)
+        address strategyAddr; // strategy 주소
+        bool isAtivate; // activate 되었는지, 아닌지
+        uint strategyBalance; // strategy에서 굴리고 있는 asset의 전체 양
+        uint strategyProfit; // 이전 harvest에 비해서 얻은 수익
+        // allowRange 등 ?? 더 필요한 게 있을 듯 ??
     }
 
-        function _tryGetAssetDecimals(IERC20 asset_) private returns (bool, uint8) {
+    address[] strategyAddrs;
+    mapping(address => Strategy) strategies;
+
+    modifier onlyDac {
+        require(msg.sender == dacAddr, "Vault: Only DAC can call this func");
+        _;
+    }
+
+    // constructor 수정 필요
+    constructor(
+        address asset_,
+        string vaultName_,
+        string vaultSymbol_,
+        address dacAddr_,
+        string dacName_,
+        uint16 float_
+    )
+    ERC20(vaultName_, vaultSymbol_)
+    {
+        (bool success, uint8 assetDecimals) = _tryGetAssetDecimals(asset_);
+        _decimals = success ? assetDecimals : super.decimals();
+        _asset = IERC20(asset_);
+
+        dacAddr = dacAddr_;
+        dacName = dacName_;
+
+        _float = float_;
+        createdAt = block.timestamp;
+    }
+
+    function _tryGetAssetDecimals(IERC20 asset_) private returns (bool, uint8) {
         (bool success, bytes memory encodedDecimals) = address(asset_).call(
             abi.encodeWithSelector(IERC20Metadata.decimals.selector)
         );
@@ -57,11 +96,11 @@ contract QuinoaBaseVault is ERC20, IQuinoaBaseVault {
     }
 
     function deposit(uint256 assets, address receiver) public virtual override returns (uint256) {
-        require(!_isVaultEmergency(), "ERC4626: cannot deposit in emergency situation");
-        require(assets <= maxDeposit(receiver), "ERC4626: deposit more than max");
+        require(!_isVaultEmergency(), "Vault: cannot deposit in emergency situation");
+        require(assets <= maxDeposit(receiver), "Vault: deposit more than max");
     
         uint256 shares = previewDeposit(assets);
-        require(shares > 0, "ERC4626: deposit less than minimum");
+        require(shares > 0, "Vault: deposit less than minimum");
 
         _deposit(_msgSender(), receiver, assets, shares);
 
@@ -80,11 +119,11 @@ contract QuinoaBaseVault is ERC20, IQuinoaBaseVault {
     }
 
     function mint(uint256 shares, address receiver) public virtual override returns (uint256) {
-        require(!_isVaultEmergency(), "ERC4626: cannot mint in emergency situation");
-        require(shares <= maxMint(receiver), "ERC4626: mint more than max");
+        require(!_isVaultEmergency(), "Vault: cannot mint in emergency situation");
+        require(shares <= maxMint(receiver), "Vault: mint more than max");
 
         uint256 assets = previewMint(shares);
-        require(assets > 0, "ERC4626: mint less than minimum");
+        require(assets > 0, "Vault: mint less than minimum");
         _deposit(_msgSender(), receiver, assets, shares);
 
         return assets;
@@ -105,10 +144,10 @@ contract QuinoaBaseVault is ERC20, IQuinoaBaseVault {
         address receiver,
         address owner
     ) public virtual override returns (uint256) {
-        require(assets <= maxWithdraw(owner), "ERC4626: withdraw more than max");
+        require(assets <= maxWithdraw(owner), "Vault: withdraw more than max");
 
         uint256 shares = previewWithdraw(assets);
-        require(shares > 0, "ERC4626: withdraw less than minimum");
+        require(shares > 0, "Vault: withdraw less than minimum");
         _withdraw(_msgSender(), receiver, owner, assets, shares);
 
         return shares;
@@ -128,27 +167,43 @@ contract QuinoaBaseVault is ERC20, IQuinoaBaseVault {
         address receiver,
         address owner
     ) public virtual override returns (uint256) {
-        require(shares <= maxRedeem(owner), "ERC4626: redeem more than max");
+        require(shares <= maxRedeem(owner), "Vault: redeem more than max");
 
         uint256 assets = previewRedeem(shares);
-        require(assets > 0, "ERC4626: redeem less than minimum");
+        require(assets > 0, "Vault: redeem less than minimum");
         _withdraw(_msgSender(), receiver, owner, assets, shares);
 
         return assets;
     }
 
-    // 구현이 더 필요한 로직들
-    function totalAssets() public view virtual override returns (uint256);
-    function _isVaultEmergency() internal view virtual returns(bool);
+    function _isVaultEmergency() internal view override returns(bool) {
+        return emergencyExit == true;
+    }
 
-    function _convertToShares(uint256 assets, Math.Rounding rounding) internal view virtual returns (uint256);
-    function _convertToAssets(uint256 shares, Math.Rounding rounding) internal view virtual returns (uint256);
+    function _convertToShares(uint256 assets, Math.Rounding rounding) internal view override returns (uint256){
+        uint256 supply = totalSupply();
+        return (assets == 0 || supply == 0)
+            ? assets.mulDiv(10**decimals(), 10**_asset.decimals(), rounding)
+            : assets.mulDiv(supply, totalFreeFund(), rounding);
+    }
+
+    function _convertToAssets(uint256 shares, Math.Rounding rounding) internal view override returns (uint256){
+        uint256 supply = totalSupply();
+        return
+            (supply == 0)
+                ? shares.mulDiv(10**_asset.decimals(), 10**decimals(), rounding) // return x * y / z;
+                : shares.mulDiv(totalFreeFund(), supply, rounding);
+    }
+
+    // deposit 로직 생각
     function _deposit(
         address caller,
         address receiver,
         uint256 assets,
         uint256 shares
     ) internal virtual;
+
+    // withdraw 로직 생각
     function _withdraw(
         address caller,
         address receiver,
@@ -159,24 +214,106 @@ contract QuinoaBaseVault is ERC20, IQuinoaBaseVault {
 
     // vault attributes
     // DAC == strategiest이기 때문에 조금 고민이 필요할 듯
-    function setDAC(address newDac) external;
-    function setEmergency(bool isEmergency) external;
-    function setFloat(uint newTargetFloat) external;
+    function setDacAddress(address newDacAddress) external override onlyDac {
+        require(newDacAddress != dacAddr, "Vault: already set dac address");
+        address oldDacAddr = dacAddr;
+        dacAddr = newDacAddress;
+        UpdateDacAddress(dacDacAddr, dacAddr);
+    }
+
+    function setDacName(string memory newDacName) external override onlyDac {
+        require(newDacName != dacName, "Vault: already set dac name");
+        string memory oldDacName = dacName;
+        dacName = newDacName;
+        updateDacNam(oldDacName, dacName);
+    }
+
+    function setEmergency(bool newEmergencyExit) external override onlyDac {
+        require(newEmergencyExit != emergencyExit, "Vault: already set emergencyExit state");
+        emergencyExit = newEmergencyExit;
+
+        if(newEmergencyExit) { // emergency 발생 로직
+            
+        }
+        else { // emergency가 발생했다 사라졌을 때의 로직
+
+        }
+
+        emit UpdateEmergency(dacAddr, newEmergencyExit);
+    }
+
+    function setFloat(uint16 newFloat) external override onlyDac {
+        // newFloat : 만분율
+        // 10000 = 100%, 1000 = 10%, 100 = 1%, 10 = 0.1%, 1 = 0.01%
+        require(newFloat > 10000, "Vault: too high target float percent");
+        _float = newFloat;
+        emit UpdateFloat(dacAddr, newFloat);
+    }
 
     // vault get function
-    function getDac() external;
-    function getStrategies() external;
+    function getDac() external view override returns(address){
+        return dacAddr;
+    }
 
-    // relative with strategy
-    function addStrategy(Strategy newStrategy) external;
-    function activateStrategy(address strategy) external;
-    function deactivateStrategy(address strategy) external;
+    // strategy에 대한 논의 끝난 후 작성하는 게 좋을 듯
+    function getStrategies() external override returns(address[] memory){
+        return strategyAddrs;
+    }
+
+    function addStrategy(Strategy newStrategy) external override onlyDac {
+        // strategy의 params에 대한 유효성 검사
+
+        // 이후 strategy 추가
+        strategyAddrs.push(address(newStrategy));
+        strategies[address(newStrategy)] = newStrategy;
+
+        // 이벤트 발생
+        emit AddStrategy(dacAddr, address(newStrategy));
+    }
+
+    function activateStrategy(address strategy) external override onlyDac {
+        require(strategies[strategy].isActivate == false);
+        strategies[strategy].isActivate = true;
+        
+        // 이후 관련 조치 -> 논의 필요 ?
+        // rebalancing 같은 거! 근데 차피 추후에 하니까 상관 없을 거 같기도 함
+        emit ActivateStrategy(dacAddr, strategy);
+    }
+
+    function deactivateStrategy(address strategy) external override onlyDac {
+        require(strategies[strategy].isActivate == true);
+        strategies[strategy].isActivate = false;
+
+        // 이후 관련 조치 -> 논의 필요 ?
+        // rebalancing 같은 거! 근데 차피 추후에 하니까 상관 없을 거 같기도 함
+        emit ActivateStrategy(dacAddr, strategy);
+    }
+
+    // 논의 필요
     function rebalance(address strategy) external;
+    // 논의 필요
     function withdrawFromStrategy(uint256 amount, Strategy strategy) external;
 
-    
-    // 여기부턴 좀 ;; 생각해봐야 할듯
-    function totalFloat() external view returns (uint256);
-    function totalFreeFund() external view returns (uint256);
+    // 현재 vault가 운용하고 있는 asset의 양으로 locked profit 포함
+    function totalAssets() public view virtual override returns (uint256) {
+        uint stLen = strategyAddr.length();
+        uint totalStrategyBalance = 0;
+        for (uint i=0; i<stLen; i++) {
+            totalStrategyBalance += strategies[strategyAddr[i]].strategyBalance;
+        }
+        return _asset.balanceOf(address(this)) + totalStrategyBalance;
+    }
+
+    // vault가 실제로 보유하고 있는 asset의 양
+    function totalFloat() public view override returns (uint256) {
+        return _asset.balanceOf(address(this));
+    }
+
+    // 현재 vault에서 출금할 수 있는 asset의 양으로, locked profit은 미포함
+    function totalFreeFund() public view override returns (uint256) {
+        return totalAssets() - calculateLockedProfit();
+    }
+
+    // locked profit => 흠.. 이건 시간에 따라서 결정되는 거라서 !! 논의 필요
     function calculateLockedProfit() external view returns (uint256);
 }

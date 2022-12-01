@@ -7,13 +7,14 @@ import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 interface IQuinoaBaseVault is IERC20, IERC20Metadata {
     // event
 
-    event UpdateDac();
-    event UpdateEmergency();
-    event UpdateFloat();
+    event UpdateDacAddress(address indexed oldDacAddr, address indexed newDacAddr);
+    event UpdateDacName(address indexed oldDacName, address indexed newDacName);
+    event UpdateEmergency(address indexed dacAddr, bool indexed newEmergencyExit);
+    event UpdateFloat(address indexed dacAddr, uint16 newFloat);
 
-    event AddStrategy();
-    event ActivateStrategy();
-    event DeactivateStrategy();
+    event AddStrategy(address indexed dacAddr, address indexed strategyAddr);
+    event ActivateStrategy(address indexed dacAddr, address indexed strategyAddr);
+    event DeactivateStrategy(address indexed dacAddr, address indexed strategyAddr);
 
     event Rebalance();
     event Harvest(); 
@@ -70,13 +71,14 @@ interface IQuinoaBaseVault is IERC20, IERC20Metadata {
     ) external returns (uint256 assets);
 
     // vault attributes
-    function setDAC(address newDac) external;
-    function setEmergency(bool isEmergency) external;
-    function setFloat(uint newTargetFloat) external;
+    function setDacAddress(address newDacAddress) external;
+    function setDacName(string memory newDacName) external;
+    function setEmergency(bool newEmergencyExit) external;
+    function setFloat(uint16 newFloat) external;
 
     // vault get function
-    function getDac() external;
-    function getStrategies() external;
+    function getDac() external returns(address);
+    function getStrategies() external returns(Strategy[] memory);
 
     // relative with strategy
     function addStrategy(Strategy newStrategy) external;
