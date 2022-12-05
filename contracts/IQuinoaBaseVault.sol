@@ -80,14 +80,14 @@ interface IQuinoaBaseVault is IERC20, IERC20Metadata {
 
     // vault get function
     function getDac() external returns(address);
-    function getStrategies() external returns(Strategy[] memory);
+    function getStrategies() external returns(address[] memory);
 
     // relative with strategy
     function addStrategy(Strategy newStrategy) external;
-    function activateStrategy(address strategy) external;
-    function deactivateStrategy(address strategy) external;
-    function rebalance(address strategy) external;
-    function withdrawFromStrategy(uint256 amount, Strategy strategy) external;
+    function activateStrategy(address strategyAddr) external;
+    function deactivateStrategy(address strategyAddr) external;
+    function rebalance(address strategyAddr) external;
+    function withdrawFromStrategy(uint256 amount, address strategyAddr) external;
 
     
     // 여기부턴 좀 ;; 생각해봐야 할듯

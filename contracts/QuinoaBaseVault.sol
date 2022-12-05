@@ -5,7 +5,7 @@ import "./IQuinoaBaseVault.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
-// import {BaseStrategy as Strategy}  from "./strategies/Strategy.sol";
+import {BaseStrategy as Strategy}  from "./strategies/Strategy.sol";
 
 
 contract QuinoaBaseVault is ERC20, IQuinoaBaseVault {
@@ -23,7 +23,7 @@ contract QuinoaBaseVault is ERC20, IQuinoaBaseVault {
 
     // strategy 관련 변수들 선언 필요
     // 임시
-    struct Strategy {
+    struct StrategyAttr {
         uint8 strategyId; // strategy id(vault 안에서 이용)
         address strategyAddr; // strategy 주소
         bool isAtivate; // activate 되었는지, 아닌지
@@ -33,7 +33,7 @@ contract QuinoaBaseVault is ERC20, IQuinoaBaseVault {
     }
 
     address[] strategyAddrs;
-    mapping(address => Strategy) strategies;
+    mapping(address => StrategyAttr) strategies;
 
     modifier onlyDac {
         require(msg.sender == dacAddr, "Vault: Only DAC can call this func");
@@ -262,39 +262,42 @@ contract QuinoaBaseVault is ERC20, IQuinoaBaseVault {
         return strategyAddrs;
     }
 
+    /// @param Strategy_newStrategy 해당 param은 Strategy contract
     function addStrategy(Strategy newStrategy) external override onlyDac {
         // strategy의 params에 대한 유효성 검사
+        // 이후 strategyAttr 객체 mapping에 추가하기
+        StrategyAttr newStrategyAttr = StrategyAttr(); 
 
         // 이후 strategy 추가
         strategyAddrs.push(address(newStrategy));
-        strategies[address(newStrategy)] = newStrategy;
+        strategies[address(newStrategy)] = newStrategyAttr;
 
         // 이벤트 발생
         emit AddStrategy(dacAddr, address(newStrategy));
     }
 
-    function activateStrategy(address strategy) external override onlyDac {
-        require(strategies[strategy].isActivate == false);
-        strategies[strategy].isActivate = true;
+    function activateStrategy(address strategyAddr) external override onlyDac {
+        require(strategies[strategyAddr].isActivate == false);
+        strategies[strategyAddr].isActivate = true;
         
         // 이후 관련 조치 -> 논의 필요 ?
         // rebalancing 같은 거! 근데 차피 추후에 하니까 상관 없을 거 같기도 함
-        emit ActivateStrategy(dacAddr, strategy);
+        emit ActivateStrategy(dacAddr, strategyAddr);
     }
 
-    function deactivateStrategy(address strategy) external override onlyDac {
-        require(strategies[strategy].isActivate == true);
-        strategies[strategy].isActivate = false;
+    function deactivateStrategy(address strategyAddr) external override onlyDac {
+        require(strategies[strategyAddr].isActivate == true);
+        strategies[strategyAddr].isActivate = false;
 
         // 이후 관련 조치 -> 논의 필요 ?
         // rebalancing 같은 거! 근데 차피 추후에 하니까 상관 없을 거 같기도 함
-        emit ActivateStrategy(dacAddr, strategy);
+        emit ActivateStrategy(dacAddr, strategyAddr);
     }
 
     // 논의 필요
-    function rebalance(address strategy) external;
+    function rebalance(address strategyAddr) external;
     // 논의 필요
-    function withdrawFromStrategy(uint256 amount, Strategy strategy) external;
+    function withdrawFromStrategy(uint256 amount, address strategyAddr) external;
 
     // 현재 vault가 운용하고 있는 asset의 양으로 locked profit 포함
     function totalAssets() public view virtual override returns (uint256) {
