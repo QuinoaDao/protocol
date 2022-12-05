@@ -5,6 +5,8 @@ import "./IQuinoaBaseVault.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
+// import {BaseStrategy as Strategy}  from "./strategies/Strategy.sol";
+
 
 contract QuinoaBaseVault is ERC20, IQuinoaBaseVault {
     using Math for uint256;
@@ -41,10 +43,10 @@ contract QuinoaBaseVault is ERC20, IQuinoaBaseVault {
     // constructor 수정 필요
     constructor(
         address asset_,
-        string vaultName_,
-        string vaultSymbol_,
+        string memory vaultName_,
+        string memory vaultSymbol_,
         address dacAddr_,
-        string dacName_,
+        string memory dacName_,
         uint16 float_
     )
     ERC20(vaultName_, vaultSymbol_)
@@ -218,14 +220,14 @@ contract QuinoaBaseVault is ERC20, IQuinoaBaseVault {
         require(newDacAddress != dacAddr, "Vault: already set dac address");
         address oldDacAddr = dacAddr;
         dacAddr = newDacAddress;
-        UpdateDacAddress(dacDacAddr, dacAddr);
+        UpdateDacAddress(oldDacAddr, dacAddr);
     }
 
     function setDacName(string memory newDacName) external override onlyDac {
         require(newDacName != dacName, "Vault: already set dac name");
         string memory oldDacName = dacName;
         dacName = newDacName;
-        updateDacNam(oldDacName, dacName);
+        UpdateDacName(oldDacName, dacName);
     }
 
     function setEmergency(bool newEmergencyExit) external override onlyDac {
@@ -296,10 +298,10 @@ contract QuinoaBaseVault is ERC20, IQuinoaBaseVault {
 
     // 현재 vault가 운용하고 있는 asset의 양으로 locked profit 포함
     function totalAssets() public view virtual override returns (uint256) {
-        uint stLen = strategyAddr.length();
+        uint stLen = strategyAddrs.length();
         uint totalStrategyBalance = 0;
         for (uint i=0; i<stLen; i++) {
-            totalStrategyBalance += strategies[strategyAddr[i]].strategyBalance;
+            totalStrategyBalance += strategies[strategyAddrs[i]].strategyBalance;
         }
         return _asset.balanceOf(address(this)) + totalStrategyBalance;
     }
@@ -315,5 +317,5 @@ contract QuinoaBaseVault is ERC20, IQuinoaBaseVault {
     }
 
     // locked profit => 흠.. 이건 시간에 따라서 결정되는 거라서 !! 논의 필요
-    function calculateLockedProfit() external view returns (uint256);
+    function calculateLockedProfit() public view returns (uint256);
 }
