@@ -10,7 +10,7 @@ interface IQuinoaBaseVault is IERC20, IERC20Metadata {
     // event
 
     event UpdateDacAddress(address indexed oldDacAddr, address indexed newDacAddr);
-    event UpdateDacName(address indexed oldDacName, address indexed newDacName);
+    event UpdateDacName(string indexed oldDacName, string indexed newDacName);
     event UpdateEmergency(address indexed dacAddr, bool indexed newEmergencyExit);
     event UpdateFloat(address indexed dacAddr, uint16 newFloat);
 

@@ -11,7 +11,7 @@ import {BaseStrategy as Strategy}  from "./strategies/Strategy.sol";
 abstract contract QuinoaBaseVault is ERC20, IQuinoaBaseVault {
     using Math for uint256;
 
-    IERC20 private immutable _asset;
+    IERC20Metadata private immutable _asset;
     uint8 private immutable _decimals;
     uint16 private _float; // 만분율
 
@@ -26,7 +26,7 @@ abstract contract QuinoaBaseVault is ERC20, IQuinoaBaseVault {
     struct StrategyAttr {
         uint8 strategyId; // strategy id(vault 안에서 이용)
         address strategyAddr; // strategy 주소
-        bool isAtivate; // activate 되었는지, 아닌지
+        bool isActivate; // activate 되었는지, 아닌지
         uint strategyBalance; // strategy에서 굴리고 있는 asset의 전체 양
         uint strategyProfit; // 이전 harvest에 비해서 얻은 수익
         // allowRange 등 ?? 더 필요한 게 있을 듯 ??
@@ -53,7 +53,7 @@ abstract contract QuinoaBaseVault is ERC20, IQuinoaBaseVault {
     {
         (bool success, uint8 assetDecimals) = _tryGetAssetDecimals(IERC20(asset_));
         _decimals = success ? assetDecimals : super.decimals();
-        _asset = IERC20(asset_);
+        _asset = IERC20Metadata(asset_);
 
         dacAddr = dacAddr_;
         dacName = dacName_;
@@ -220,14 +220,14 @@ abstract contract QuinoaBaseVault is ERC20, IQuinoaBaseVault {
         require(newDacAddress != dacAddr, "Vault: already set dac address");
         address oldDacAddr = dacAddr;
         dacAddr = newDacAddress;
-        UpdateDacAddress(oldDacAddr, dacAddr);
+        emit UpdateDacAddress(oldDacAddr, dacAddr);
     }
 
     function setDacName(string memory newDacName) external override onlyDac {
-        require(newDacName != dacName, "Vault: already set dac name");
+        require(keccak256(bytes(newDacName)) != keccak256(bytes(dacName)), "Vault: already set dac name");
         string memory oldDacName = dacName;
         dacName = newDacName;
-        UpdateDacName(oldDacName, dacName);
+        emit UpdateDacName(oldDacName, dacName);
     }
 
     function setEmergency(bool newEmergencyExit) external override onlyDac {
@@ -258,7 +258,7 @@ abstract contract QuinoaBaseVault is ERC20, IQuinoaBaseVault {
     }
 
     // strategy에 대한 논의 끝난 후 작성하는 게 좋을 듯
-    function getStrategies() external override returns(address[] memory){
+    function getStrategies() external override view returns(address[] memory){
         return strategyAddrs;
     }
 
@@ -266,7 +266,7 @@ abstract contract QuinoaBaseVault is ERC20, IQuinoaBaseVault {
     function addStrategy(Strategy newStrategy) external override onlyDac {
         // strategy의 params에 대한 유효성 검사
         // 이후 strategyAttr 객체 mapping에 추가하기
-        StrategyAttr memory newStrategyAttr = StrategyAttr(); 
+        StrategyAttr memory newStrategyAttr; 
 
         // 이후 strategy 추가
         strategyAddrs.push(address(newStrategy));
@@ -295,13 +295,13 @@ abstract contract QuinoaBaseVault is ERC20, IQuinoaBaseVault {
     }
 
     // 논의 필요
-    function rebalance(address strategyAddr) external;
+    function rebalance(address strategyAddr) virtual external;
     // 논의 필요
-    function withdrawFromStrategy(uint256 amount, address strategyAddr) external;
+    function withdrawFromStrategy(uint256 amount, address strategyAddr) virtual external;
 
     // 현재 vault가 운용하고 있는 asset의 양으로 locked profit 포함
     function totalAssets() public view virtual override returns (uint256) {
-        uint stLen = strategyAddrs.length();
+        uint stLen = strategyAddrs.length;
         uint totalStrategyBalance = 0;
         for (uint i=0; i<stLen; i++) {
             totalStrategyBalance += strategies[strategyAddrs[i]].strategyBalance;
@@ -320,5 +320,7 @@ abstract contract QuinoaBaseVault is ERC20, IQuinoaBaseVault {
     }
 
     // locked profit => 흠.. 이건 시간에 따라서 결정되는 거라서 !! 논의 필요
-    function calculateLockedProfit() public view returns (uint256);
+    function calculateLockedProfit() public view returns (uint256) {
+        
+    }
 }
