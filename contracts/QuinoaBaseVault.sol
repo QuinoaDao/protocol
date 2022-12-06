@@ -8,7 +8,7 @@ import "@openzeppelin/contracts/utils/math/Math.sol";
 import {BaseStrategy as Strategy}  from "./strategies/Strategy.sol";
 
 
-contract QuinoaBaseVault is ERC20, IQuinoaBaseVault {
+abstract contract QuinoaBaseVault is ERC20, IQuinoaBaseVault {
     using Math for uint256;
 
     IERC20 private immutable _asset;
@@ -51,7 +51,7 @@ contract QuinoaBaseVault is ERC20, IQuinoaBaseVault {
     )
     ERC20(vaultName_, vaultSymbol_)
     {
-        (bool success, uint8 assetDecimals) = _tryGetAssetDecimals(asset_);
+        (bool success, uint8 assetDecimals) = _tryGetAssetDecimals(IERC20(asset_));
         _decimals = success ? assetDecimals : super.decimals();
         _asset = IERC20(asset_);
 
@@ -178,18 +178,18 @@ contract QuinoaBaseVault is ERC20, IQuinoaBaseVault {
         return assets;
     }
 
-    function _isVaultEmergency() internal view override returns(bool) {
+    function _isVaultEmergency() internal view returns(bool) {
         return emergencyExit == true;
     }
 
-    function _convertToShares(uint256 assets, Math.Rounding rounding) internal view override returns (uint256){
+    function _convertToShares(uint256 assets, Math.Rounding rounding) internal view returns (uint256){
         uint256 supply = totalSupply();
         return (assets == 0 || supply == 0)
             ? assets.mulDiv(10**decimals(), 10**_asset.decimals(), rounding)
             : assets.mulDiv(supply, totalFreeFund(), rounding);
     }
 
-    function _convertToAssets(uint256 shares, Math.Rounding rounding) internal view override returns (uint256){
+    function _convertToAssets(uint256 shares, Math.Rounding rounding) internal view returns (uint256){
         uint256 supply = totalSupply();
         return
             (supply == 0)
@@ -262,11 +262,11 @@ contract QuinoaBaseVault is ERC20, IQuinoaBaseVault {
         return strategyAddrs;
     }
 
-    /// @param Strategy_newStrategy 해당 param은 Strategy contract
+    /// @param newStrategy 해당 param은 Strategy contract
     function addStrategy(Strategy newStrategy) external override onlyDac {
         // strategy의 params에 대한 유효성 검사
         // 이후 strategyAttr 객체 mapping에 추가하기
-        StrategyAttr newStrategyAttr = StrategyAttr(); 
+        StrategyAttr memory newStrategyAttr = StrategyAttr(); 
 
         // 이후 strategy 추가
         strategyAddrs.push(address(newStrategy));
