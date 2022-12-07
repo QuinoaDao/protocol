@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.9;
 
 import "./IQuinoaBaseVault.sol";
@@ -13,7 +13,7 @@ abstract contract QuinoaBaseVault is ERC20, IQuinoaBaseVault {
 
     IERC20Metadata private immutable _asset;
     uint8 private immutable _decimals;
-    uint16 private _float; // 만분율
+    uint16 private _float; // basis
 
     address dacAddr;
     string dacName;
@@ -21,8 +21,8 @@ abstract contract QuinoaBaseVault is ERC20, IQuinoaBaseVault {
 
     bool emergencyExit = false; 
 
-    // strategy 관련 변수들 선언 필요
-    // 임시
+    /// @notice Strategy's main attributes are need to be initiailized
+    /// @dev temporary
     struct StrategyAttr {
         uint8 strategyId; // strategy id(vault 안에서 이용)
         address strategyAddr; // strategy 주소
@@ -40,7 +40,7 @@ abstract contract QuinoaBaseVault is ERC20, IQuinoaBaseVault {
         _;
     }
 
-    // constructor 수정 필요
+    /// @dev TODO needs to be keep updated
     constructor(
         address asset_,
         string memory vaultName_,
@@ -87,9 +87,9 @@ abstract contract QuinoaBaseVault is ERC20, IQuinoaBaseVault {
         return _convertToAssets(shares, Math.Rounding.Down);
     }
 
-    // emergency가 아니라면 max로 입금 가능 (asset 기준) -> 이때, 이건 vault 자체에 예치할 수 있는 전체 금액을 의미
+    // emergency가 아니라면 max로 입금 가능 (asset 기준) -> 이때, 이건 vault 자체에 예치할 수 있는 전체 금액을 의미. emergency 상황일 땐 모두 예치 불가
+    ///@notice user can deposit underlying assets as much as they want in vault's available except in emergency. In emergency situation, user can't deposit.
     function maxDeposit(address) public view virtual override returns (uint256 maxAssets) {
-        // emergency 상황일 땐 모두 예치 불가
         return _isVaultEmergency() ? 0 : type(uint256).max;
     }
 
@@ -116,8 +116,7 @@ abstract contract QuinoaBaseVault is ERC20, IQuinoaBaseVault {
     }
 
     function previewMint(uint256 shares) public view virtual override returns (uint256) {
-        // Rounding.Up 인데, Down으로 바꿀까 ?
-        return _convertToAssets(shares, Math.Rounding.Up);
+        return _convertToAssets(shares, Math.Rounding.Down);
     }
 
     function mint(uint256 shares, address receiver) public virtual override returns (uint256) {
@@ -138,7 +137,7 @@ abstract contract QuinoaBaseVault is ERC20, IQuinoaBaseVault {
 
     function previewWithdraw(uint256 assets) public view virtual override returns (uint256) {
         // Rounding.Up인데, Down으로 바꿀까 ?
-        return _convertToShares(assets, Math.Rounding.Up);
+        return _convertToShares(assets, Math.Rounding.Down);
     }
 
     function withdraw(
@@ -203,7 +202,7 @@ abstract contract QuinoaBaseVault is ERC20, IQuinoaBaseVault {
         address receiver,
         uint256 assets,
         uint256 shares
-    ) internal virtual;
+    ) internal virtual {}
 
     // withdraw 로직 생각
     function _withdraw(
@@ -212,7 +211,7 @@ abstract contract QuinoaBaseVault is ERC20, IQuinoaBaseVault {
         address owner,
         uint256 assets,
         uint256 shares
-    ) internal virtual;
+    ) internal virtual {}
 
     // vault attributes
     // DAC == strategiest이기 때문에 조금 고민이 필요할 듯
@@ -295,9 +294,9 @@ abstract contract QuinoaBaseVault is ERC20, IQuinoaBaseVault {
     }
 
     // 논의 필요
-    function rebalance(address strategyAddr) virtual external;
+    function rebalance(address strategyAddr) virtual external {}
     // 논의 필요
-    function withdrawFromStrategy(uint256 amount, address strategyAddr) virtual external;
+    function withdrawFromStrategy(uint256 amount, address strategyAddr) virtual external {}
 
     // 현재 vault가 운용하고 있는 asset의 양으로 locked profit 포함
     function totalAssets() public view virtual override returns (uint256) {
