@@ -2,7 +2,6 @@
 pragma solidity ^0.8.4;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 
 /**
@@ -13,7 +12,7 @@ import "@openzeppelin/contracts/security/Pausable.sol";
  * Will be extended from specific category strategy contracts made and deployed by DAC.
  */
 
-abstract contract BaseStrategy is AccessControl, Pausable {
+abstract contract BaseStrategy is Pausable {
     /*///////////////////////////////////////////////////////////////
                                 Public
     //////////////////////////////////////////////////////////////*/
@@ -21,21 +20,14 @@ abstract contract BaseStrategy is AccessControl, Pausable {
     address public swapRouter;
     address public dac;
     address public keeper;
-    address public governance;
-    bytes32 public constant DAC_ROLE = keccak256("DAC_ROLE");
-    bytes32 public constant GOVERNANCE_ROLE = keccak256("GOVERNANCE_ROLE");
     bool public isEmergency = false;
 
     /*///////////////////////////////////////////////////////////////
                                 Modifier
     //////////////////////////////////////////////////////////////*/
-    modifier onlyGovernance() {
-        require(hasRole(GOVERNANCE_ROLE, msg.sender), "Caller is not authorized");
-        _;
-    }
     
     modifier onlyDAC() {
-        require(hasRole(GOVERNANCE_ROLE, msg.sender) || hasRole(DAC_ROLE, msg.sender), "Caller is not authorized");
+        require(msg.sender == dac, "Caller is not authorized");
         _;
     }
 
@@ -46,8 +38,6 @@ abstract contract BaseStrategy is AccessControl, Pausable {
     event SetSwapRouter(address swapRouter);
     event SetDAC(address dac);
     event SetKeeper(address keeper);
-    event SetGovernance(address governance);
-
     /*///////////////////////////////////////////////////////////////
                                 Configuration
     //////////////////////////////////////////////////////////////*/
@@ -55,16 +45,12 @@ abstract contract BaseStrategy is AccessControl, Pausable {
     uint256 internal performanceFee;
     IERC20 underlying;
 
-    constructor(address _vault, address _underlying, address _swapRouter, address _dac, address _keeper, address _governance) {
+    constructor(address _vault, address _underlying, address _swapRouter, address _dac, address _keeper) {
         vault = _vault;
         underlying = IERC20(_underlying);
         swapRouter = _swapRouter;
         dac = _dac;
         keeper = _keeper;
-        governance = _governance;
-        _setupRole(DEFAULT_ADMIN_ROLE, governance);
-        _grantRole(DAC_ROLE, dac);
-        _grantRole(GOVERNANCE_ROLE, governance);
     }
 
     // set new vault (only for strategy upgrades)
@@ -73,7 +59,8 @@ abstract contract BaseStrategy is AccessControl, Pausable {
         emit SetVault(_vault);
     }
 
-    // set new swap router
+    /// @notice set the address of swap router or the platform after initialized
+    /// @param _swapRouter the address of the new swap router such as Uniswap, Balancer
     function setSwapRouter(address _swapRouter) external onlyDAC {
         swapRouter = _swapRouter;
         emit SetSwapRouter(_swapRouter);
@@ -99,7 +86,7 @@ abstract contract BaseStrategy is AccessControl, Pausable {
         }
     }
 
-    function name() external view virtual returns (string memory);
+    function name() external pure virtual returns (string memory);
 
     function asset() external view returns (address) {
         return address(underlying);
