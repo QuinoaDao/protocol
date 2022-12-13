@@ -7,6 +7,7 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
 import {BaseStrategy as Strategy} from "./strategies/Strategy.sol";
 
+
 abstract contract QuinoaBaseVault is ERC20, IQuinoaBaseVault {
     using Math for uint256;
 
