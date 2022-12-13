@@ -133,7 +133,6 @@ contract Router is Ownable {
                             Buying
     //////////////////////////////////////////////////////////////*/
 
-    // deposit to vault for the first time
     function buy(address _vault, uint256 _amount) external {
         IQuinoaBaseVault vault = IQuinoaBAseVault(_vault);
         IERC20 vaultToken = IERC20(vault);
@@ -169,69 +168,39 @@ contract Router is Ownable {
         NFTManager.deposit(msg.sender, address(vault), qvTokenAdded);
     }
 
-    // add asset to existing NFT
-    function buy(uint256 amount, uint256 tokenId) external {
-        require(
-            NFTWrappingManager.ownerOf(tokenId) == msg.sender,
-            "only owner of token can change token state"
-        );
-        (address _vault, , ) = NFTWrappingManager.depositInfo(tokenId);
-        IQuinoaBaseVault vault = IQuinoaBaseVault(_vault);
-        IERC20 assetToken = IERC20(vault.asset());
-        IERC20 vaultToken = IERC20(_vault);
-
-        // get asset from client
-        assetToken.transferFrom(msg.sender, address(this), amount);
-
-        // exchange asset - vaultToken with Vault
-        uint256 currentAmount = vaultToken.balanceOf(address(this));
-        assetToken.approve(address(vault), amount);
-        uint256 vaultTokenAdded = vault.deposit(amount, address(this));
-
-        require(
-            vaultToken.balanceOf(address(this)) - currentAmount ==
-                vaultTokenAdded,
-            "Router: Amount of qvToken to relay has unexpected value"
-        );
-
-        // send vaultToken to NFTManager
-        vaultToken.transfer(address(NftManager), vaultTokenAdded);
-        NftManager.deposit(vaultTokenAdded, tokenId);
-    }
-
     /*///////////////////////////////////////////////////////////////
                             Selling
     //////////////////////////////////////////////////////////////*/
 
     function sell(uint256 tokenId, uint256 amount) external {
         require(
-            NFTWrappingManager.ownerOf(tokenId) == msg.sender,
+            NftManager.ownerOf(tokenId) == msg.sender,
             "only owner of token can change token state"
         );
         (
             address _vault,
-            uint256 _qvTokenAmount,
+            uint256 _vaultTokenAmount,
             bool isFullyRedeemed
-        ) = NFTWrappingManager.depositInfo(tokenId);
+        ) = NftManager.depositInfo(tokenId);
         require(
-            !isFullyRedeemed && amount <= _qvTokenAmount,
+            !isFullyRedeemed && amount <= _vaultTokenAmount,
             "not enough token to withdraw"
         );
 
         IVault vault = IVault(_vault);
-        IERC20 qvToken = IERC20(_vault);
+        IERC20 vaultToken = IERC20(_vault);
         IERC20 assetToken = IERC20(vault.asset());
 
-        // withdraw qvtoken from NFTManager
-        uint256 currentAmount = qvToken.balanceOf(address(this));
-        NFTWrappingManager.withdraw(tokenId, address(vault), amount);
+        // withdraw vaultToken from NFTManager
+        uint256 currentAmount = vaultToken.balanceOf(address(this));
+        NftManager.withdraw(tokenId, address(vault), amount);
 
         require(
-            qvToken.balanceOf(address(this)) - currentAmount == amount,
+            vaultToken.balanceOf(address(this)) - currentAmount == amount,
             "Router: Amount of qvToken to relay has unexpected value"
         );
 
-        // send qvToken to Vault and redeem it
+        // send vaultToken to Vault and redeem it
         uint256 beforeRedeem = assetToken.balanceOf(address(this));
         //qvToken.transfer(address(vault), amount);
         uint256 addedAsset = vault.redeem(amount, address(this), address(this));
