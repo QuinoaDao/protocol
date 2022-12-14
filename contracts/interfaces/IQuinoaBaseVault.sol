@@ -3,7 +3,7 @@ pragma solidity ^0.8.9;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-import {BaseStrategy as Strategy}  from "./strategies/Strategy.sol";
+import {BaseStrategy as Strategy}  from "../strategies/Strategy.sol";
 
 
 interface IQuinoaBaseVault is IERC20, IERC20Metadata {

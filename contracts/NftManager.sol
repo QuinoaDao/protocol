@@ -4,16 +4,14 @@ import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "./interfaces/INftManager.sol";
 import "./interfaces/IQuinoaBaseVault.sol";
 
 
-contract NFtManager is ERC721 {
+contract NFtManager is ERC721, INftManager {
     using Counters for Counters.Counter;
     Counters.Counter private _tokenIdCounter;
     using Math for uint256;
-
-    event NewNftMinted(address recipient, uint256 tokenId);
-    event FullyRedeemed(address vaultAddress, address redeemedBy, uint256 tokenId);
 
     // NFT로 warpping 될 예치 정보
     struct DepositInfo {
@@ -57,18 +55,14 @@ contract NFtManager is ERC721 {
                          Get NFT Information
     //////////////////////////////////////////////////////////////*/
 
-    function getTokenIds(address _user, address _vault) external view onlyRouter returns(uint256[] memory tokenIds){
+    function getTokenId(address _user, address _vault) external view onlyRouter returns(uint256 tokenId){
         return _userAssets[_user][_vault];
     }
 
 
     function getUserVaultTokenAmount(address _user, address _vault) external view returns(uint256){
-        uint256[] memory tokens = _userAssets[_user][_vault];
-        uint256 sum = 0;
-        for(uint i=0; i<tokens.length; i++) {
-            sum += _deposits[tokens[i]].vaultTokenAmount;
-        }
-        return sum;
+        uint256 token = _userAssets[_user][_vault];
+        return _deposits[token].vaultTokenAmount;
     }
 
     /*///////////////////////////////////////////////////////////////
@@ -80,13 +74,13 @@ contract NFtManager is ERC721 {
     }
 
     function isFullWithdraw(uint256 tokenId, uint256 amount) internal view returns(bool){
-        return amount == getVaulTokenAmount(tokenId);
+        return amount == getVaultTokenAmount(tokenId);
     }
 
     function withdraw(address user, address vault, uint256 amount)external onlyRouter {
     
         require(IERC20(vault).balanceOf(address(this)) > amount, "NftWrappingManager: Don't have enough qToken to redeem!");
-        
+        uint256 tokenId = _userAssets[msg.sender][vault];
         if (isFullWithdraw(tokenId, amount) ) {// full withdraw      
             burn(tokenId); 
             _deposits[tokenId].isFullyRedeemed = true;
@@ -95,6 +89,7 @@ contract NFtManager is ERC721 {
 
         } else{ // partial withdraw. update Nft info
             _deposits[tokenId].vaultTokenAmount -= amount;
+            emit NftVaultTokenSubtracted(tokenId, vault, user, amount, _deposits[tokenId].vaultTokenAmount);
         }
         IERC20(vault).transfer(router, amount);
     }
@@ -121,7 +116,7 @@ contract NFtManager is ERC721 {
         DepositInfo memory _deposit = _deposits[tokenId];
         return (
             _deposit.vault,
-            _deposit.qTokenAmount,
+            _deposit.vaultTokenAmount,
             _deposit.isFullyRedeemed
         );
     }
@@ -134,16 +129,19 @@ contract NFtManager is ERC721 {
     {
         uint256 tokenId = _userAssets[user][vault]; 
         if ( tokenId == 0 ) { // first time to deposit to vault
-            DepositInfo memory _deposit = DepositInfo(vault, qTokenAmount, false);
-            uint256 tokenId = _tokenIdCounter.current();
-            _deposits[tokenId] = _deposit;
+            DepositInfo memory _deposit = DepositInfo(vault, vaultTokenAmount, false);
+            uint256 newTokenId = _tokenIdCounter.current();
+            _deposits[newTokenId] = _deposit;
             _tokenIdCounter.increment();
-            _safeMint(user,tokenId);
+            _safeMint(user,newTokenId);
             _userAssets[user][vault] = tokenId;
+            emit NewNftMinted(user, tokenId, _deposits[newTokenId].vaultTokenAmount);
+            return newTokenId;
         } else { // additional deposit
             _deposits[tokenId].vaultTokenAmount += vaultTokenAmount;
+            emit NftVaultTokenAdded(tokenId, vault, user, vaultTokenAmount, _deposits[tokenId].vaultTokenAmount);
+            return tokenId;
         }
-        return tokenId;
     }
 
 
