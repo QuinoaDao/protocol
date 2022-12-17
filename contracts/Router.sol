@@ -3,6 +3,7 @@ pragma solidity ^0.8.9;
 import {IQuinoaBaseVault} from "./interfaces/IQuinoaBaseVault.sol";
 import {INftManager} from "./interfaces/INftManager.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
 
 contract Router is Ownable {
@@ -11,9 +12,9 @@ contract Router is Ownable {
     uint256 public protocolFee = 0;
     address public protocolTreasury;
     address public vaultFactory;
-    INftManager public _nftManager;
+    INftManager public nftManager;
 
-    constructor(address _protocolTreasury) {
+    constructor(address _protocolTreasury, address _nftManager) {
         require(
             _protocolTreasury != address(0),
             "Router: Zero address for protocolTreasury is not allowed"
@@ -22,6 +23,7 @@ contract Router is Ownable {
             _nftManager != address(0),
             "Router: Zero address for NftManager is not allowed"
         );
+        nftManager = INftManager(_nftManager);
         protocolTreasury = _protocolTreasury;
     }
 
@@ -53,7 +55,6 @@ contract Router is Ownable {
                             VaultStats
     //////////////////////////////////////////////////////////////*/
 
-
     function setVaultFactory(address _vaultFactory) public onlyOwner {
         require(
             _vaultFactory != address(0),
@@ -61,7 +62,6 @@ contract Router is Ownable {
         );
         vaultFactory = _vaultFactory;
     }
-
 
     /*///////////////////////////////////////////////////////////////
                             Buying
@@ -79,7 +79,7 @@ contract Router is Ownable {
         uint256 depositAmount = _amount;
 
         uint256 protocolFeeAmount = _amount.mulDiv(
-            protocolFeePercent,
+            protocolFee,
             1e18,
             Math.Rounding.Down
         );
@@ -98,9 +98,8 @@ contract Router is Ownable {
         );
 
         // send vaultToken to NFTManager
-        vaultToken.transfer(address(NFTManager), qvTokenAdded);
-        NFTManager.deposit(msg.sender, address(vault), qvTokenAdded);
-        
+        vaultToken.transfer(address(nftManager), vaultTokenAdded);
+        nftManager.deposit(msg.sender, address(vault), vaultTokenAdded);
     }
 
     /*///////////////////////////////////////////////////////////////
@@ -109,26 +108,26 @@ contract Router is Ownable {
 
     function sell(uint256 tokenId, uint256 amount) external {
         require(
-            NftManager.ownerOf(tokenId) == msg.sender,
+            nftManager.ownerOf(tokenId) == msg.sender,
             "only owner of token can change token state"
         );
         (
             address _vault,
             uint256 _vaultTokenAmount,
             bool isFullyRedeemed
-        ) = NftManager.depositInfo(tokenId);
+        ) = nftManager.depositInfo(tokenId);
         require(
             !isFullyRedeemed && amount <= _vaultTokenAmount,
             "not enough token to withdraw"
         );
 
-        IVault vault = IVault(_vault);
+        IQuinoaBaseVault vault = IQuinoaBaseVault(_vault);
         IERC20 vaultToken = IERC20(_vault);
         IERC20 assetToken = IERC20(vault.asset());
 
         // withdraw vaultToken from NFTManager
         uint256 currentAmount = vaultToken.balanceOf(address(this));
-        NftManager.withdraw(tokenId, address(vault), amount);
+        nftManager.withdraw(msg.sender, address(vault), amount);
 
         require(
             vaultToken.balanceOf(address(this)) - currentAmount == amount,
